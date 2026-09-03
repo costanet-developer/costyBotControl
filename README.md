@@ -1,58 +1,217 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# costyBotControl
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Panel de control y monitorización para **CostyBot**, un bot de WhatsApp que gestiona reactivaciones de servicio y consultas de saldo para clientes de ISP/telecomunicaciones.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 🎯 ¿Qué es este sistema?
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+**costyBotControl** es una aplicación Laravel que actúa como **panel de solo lectura** para supervisar la operación de un bot de WhatsApp (desarrollado en **n8n**) que:
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- Recibe comprobantes de pago por WhatsApp (imagen/foto/captura)
+- Usa **OCR (OpenAI)** para extraer datos del comprobante (banco, monto, transacción, fecha, titular)
+- Valida contra la API **Costanet/Mikrowisp** (facturas, pagos, activación de servicio)
+- Reactiva servicios automáticamente cuando el pago coincide con la deuda
+- Registra saldos a favor por sobrepagos
+- Maneja flujos multi-servicio (cliente con varios contratos)
 
-## Learning Laravel
+El panel **nunca escribe en la base de datos**; solo consume los datos que n8n persiste en PostgreSQL.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+---
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## 🏗️ Arquitectura
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+```
+Cliente (WhatsApp)
+       │
+       ▼
+[n8n] CostyBot Whatsapp - Reactivación  (workflow de 159 nodos)
+       │
+       ├──► API Costanet/Mikrowisp  → GetInvoices, PaidInvoice, ActiveService
+       ├──► Meta Graph API (WhatsApp) → enviar mensajes, stickers, guías
+       ├──► OCR por IA (OpenAI / LangChain)
+       ├──► Archivos CSV  → validación de duplicados
+       ├──► Almacenamiento de imágenes
+       └──► [PostgreSQL] costy_sesiones  ← Fuente de verdad
+                        │
+                        ▼
+              [Panel Laravel] costyBotControl
+              → Dashboard, Reportes, Auditoría, KPIs (solo LECTURA)
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+---
 
-## Contributing
+## 📊 Funcionalidades principales del panel
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+| Módulo | Descripción |
+|--------|-------------|
+| **Dashboard** | Métricas del día, KPIs (FCR/CES 7/30/90 días), últimos pagos, alertas operativas |
+| **Interacciones** | Listado paginado de sesiones con línea de tiempo de eventos (cédula, comprobante, OCR, validación, reactivación) |
+| **Pendientes** | Comprobantes por auditar, créditos pendientes, KYC en revisión |
+| **Casos Operativos** | Detección automática de anomalías (pago sin comprobante, duplicados, monto no coincide, etc.) con asignación y SLA |
+| **Resumen Gerencial** | Comparativo período actual vs anterior: interacciones, clientes, pagos, monto, créditos, casos, KPIs, serie temporal, top bancos, responsables |
+| **Reportes** | Exportación a Excel de interacciones, pagos, comprobantes, auditoría |
+| **Auditoría** | Log de acciones administrativas y de API (pagos, activaciones) |
+| **Usuarios** | Gestión de accesos y roles (spatie/laravel-permission) |
 
-## Code of Conduct
+---
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## 🗄️ Modelo de datos (tablas clave)
 
-## Security Vulnerabilities
+| Tabla | Descripción |
+|-------|-------------|
+| `sesiones` | Una fila por conversación de WhatsApp. Campos: `sesion_id`, `numero_whatsapp`, `resultado` (`reactivado`, `cuenta_al_dia`, `transferido_pagos`, `cerrado_sin_comprobante`, `no_reconocido`), `comprobante_id`, `inicio`/`fin` (UTC), `estado_sesion` |
+| `comprobantes` | Comprobantes recibidos. `estado` (`recibida`, `reactivacion_exitosa`, `duplicado`, `rechazada`), `origen` (`ocr_automatico`, `manual`), `monto`, `banco`, `numero_transaccion`, `fecha_hora` |
+| `eventos_interaccion` | Línea de tiempo granular: `menu_mostrado`, `cedula_valida`, `comprobante_recibido`, `ocr_legible`, `monto_coincide`, `reactivacion_exitosa`, `encuesta_ces_respondida`, etc. |
+| `clientes` | Datos del cliente sincronizados desde Costanet (`numero_whatsapp`, `nombre`, `cedula`, `ultima_interaccion`) |
+| `casos_operativos` | Alertas detectadas automáticamente con tipo, severidad, asignación, SLA, resolución |
+| `alertas_operativas` | Alertas de umbral (SLA vencido, acumulación pendientes, tasa de pago baja) |
+| `encuestas_ces` | Encuestas CES enviadas/respondidas (escala 1-7) por tipo de gestión |
+| `validaciones_identidad` | KYC: cédula, correo, derivación a revisión |
+| `saldos_a_favor` | Excedentes por sobrepago, estado `pendiente`/`aplicado`/`rechazado` |
+| `auditoria_logs` | Trazabilidad de acciones de API y administrativas |
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+---
 
-## License
+## ⚙️ Indicadores KPI (FCR / CES)
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+El servicio `IndicadoresKpiService` calcula **First Contact Resolution (FCR)** y **Customer Effort Score (CES)** por tipo de gestión:
+
+- **Reactivación**: cliente elige "Reactivar" → FCR = % sesiones resueltas en 1er contacto (pago válido → `reactivado`)
+- **Consulta de valores**: cliente elige "Consultar saldo" → FCR = % sesiones donde se mostró el saldo correctamente
+
+CES: encuesta 1-7 enviada tras cierre; se reporta promedio, % favorable (≥5), tasa de respuesta.
+
+---
+
+## 🚀 Requisitos
+
+- PHP ≥ 8.2
+- PostgreSQL ≥ 14
+- Composer
+- Node.js ≥ 18 + npm (para Vite/Tailwind)
+- Extensiones PHP: `pdo_pgsql`, `bcmath`, `gd`, `intl`
+
+---
+
+## 📦 Instalación
+
+```bash
+# Clonar y entrar
+cd costyBotControl
+
+# Dependencias PHP
+composer install
+
+# Dependencias JS
+npm install
+
+# Configuración
+cp .env.example .env
+# Editar .env con credenciales de PostgreSQL (costy_sesiones)
+php artisan key:generate
+
+# Base de datos (migraciones + seeders si los hay)
+php artisan migrate
+
+# Compilar assets
+npm run build
+
+# Servidor de desarrollo
+php artisan serve
+```
+
+> **Nota**: La base de datos `costy_sesiones` es **compartida con n8n**. Las migraciones de Laravel solo crean tablas auxiliares del panel (`auditoria_logs`, `casos_operativos`, `alertas_operativas`, `encuestas_ces`, `users`, `permissions`, etc.). Las tablas principales (`sesiones`, `comprobantes`, `eventos_interaccion`, `clientes`, `saldos_a_favor`, `documentos_identidad`, `validaciones_identidad`, `otp_verificaciones`) son **gestionadas 100% por n8n**.
+
+---
+
+## 🔐 Permisos (Spatie Laravel-Permission)
+
+| Permiso | Módulo |
+|---------|--------|
+| `interacciones.ver` | Dashboard, Interacciones, Pendientes |
+| `casos.ver` / `casos.gestionar` | Casos Operativos |
+| `auditoria.ver` / `auditoria.exportar` | Auditoría, Resumen Gerencial |
+| `reportes.ver` / `reportes.exportar` | Reportes |
+| `usuarios.gestionar` | Usuarios |
+| `configuracion.ver` | (futuro) |
+
+Asignar via seeder o Tinker:
+```php
+$user->givePermissionTo('interacciones.ver');
+$user->assignRole('operador'); // o 'supervisor', 'admin'
+```
+
+---
+
+## 🧪 Testing
+
+```bash
+# Tests unitarios/feature (Pest/PHPUnit)
+php artisan test
+
+# Con coverage
+php artisan test --coverage
+```
+
+---
+
+## 📁 Estructura destacada
+
+```
+app/
+├── Http/Controllers/        # Controladores web (Dashboard, Reportes, Casos, Resumen, Auditoría)
+├── Models/                  # Eloquent models (Sesion, Comprobante, EventoInteraccion, CasoOperativo, ...)
+├── Services/                # Lógica de negocio
+│   ├── IndicadoresKpiService.php      # FCR / CES
+│   ├── ResumenGerencialService.php    # Comparativo gerencial + serie temporal
+│   ├── SeguimientoOperativo.php       # SLA de casos operativos
+│   ├── ProcesarAlertasOperativas.php  # Detección automática de alertas
+│   └── CasoOperativoDetector.php      # Reglas de detección de anomalías
+├── Exports/                 # Excel exports (Maatwebsite/Laravel-Excel)
+├── Casts/
+│   └── BotDatetime.php      # Cast UTC → America/Guayaquil para fechas del bot
+└── Enums/                   # Enums: ResultadoSesion, EstadoComprobante, TipoCasoOperativo, ...
+```
+
+---
+
+## 🕐 Convención de zonas horarias (IMPORTANTE)
+
+- **n8n escribe en UTC** (desde 2026-08-04): `sesiones.inicio`, `sesiones.fin`, `eventos_interaccion.fecha_evento`, `comprobantes.fecha_hora`, `clientes.ultima_interaccion`
+- **Histórico previo**: algunos campos se guardaron en **hora local (America/Guayaquil)** → el cast `BotDatetime` les resta 5h extra al mostrar
+- El panel asume **UTC en BD** y convierte a `America/Guayaquil` para visualización
+
+---
+
+## 🔧 Comandos útiles
+
+```bash
+# Limpiar cachés
+php artisan optimize:clear
+
+# Reconstruir cachés producción
+php artisan config:cache && php artisan route:cache && php artisan view:cache
+
+# Ejecutar detección de casos operativos (programar en cron)
+php artisan casos:detectar
+
+# Procesar alertas operativas (programar en cron)
+php artisan alertas:procesar
+
+# Exportar resumen gerencial (también desde UI)
+php artisan resumen:exportar --desde=2026-01-01 --hasta=2026-01-31
+```
+
+---
+
+## 📚 Documentación técnica adicional
+
+- [`costyN8N.md`](costyN8N.md) — Documentación completa del workflow n8n (159 nodos), fixes, bugs, convenciones
+- [`docs/`](docs/) — Especificaciones por fase: auditoría SLA, conciliación, alertas, resumen gerencial, cierre operativo
+
+---
+
+## 📄 Licencia
+
+Proyecto interno — TeleArseg / CostyBot. Uso restringido al equipo autorizado.
