@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    [x-cloak] {
+        display: none !important;
+    }
+
+    :root {
+        --color-bg: #F2F2F2;
+        --color-panel: #FFFFFF;
+        --color-card: #E9E9E9;
+        --color-border: #D4D4D4;
+        --color-text: #1E1E1E;
+        --color-muted: #5A5A5A;
+        --color-accent: #E60012;
+        --color-accent-hover: #B3000E;
+        --color-info: #0A66C2;
+    }
+
+    [data-theme="dark"] {
+        --color-bg: #0F1720;
+        --color-panel: #151F29;
+        --color-card: #1B2732;
+        --color-border: #2A3A47;
+        --color-text: #E7ECEF;
+        --color-muted: #8CA0AF;
+    }
+}
+
+@layer components {
+    .scroll-bonito {
+        scrollbar-width: thin;
+        scrollbar-color: var(--color-border) transparent;
+        scrollbar-gutter: stable;
+        overscroll-behavior: contain;
+    }
+
+    .scroll-bonito::-webkit-scrollbar {
+        width: 12px;
+        height: 12px;
+    }
+
+    .scroll-bonito::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .scroll-bonito::-webkit-scrollbar-thumb {
+        background: var(--color-border);
+        border: 3px solid transparent;
+        border-radius: 10px;
+        background-clip: padding-box;
+        transition: background-color 0.15s ease;
+    }
+
+    .scroll-bonito::-webkit-scrollbar-thumb:hover {
+        background: var(--color-accent);
+        background-clip: padding-box;
+        border: 3px solid transparent;
+    }
+
+    .scroll-bonito::-webkit-scrollbar-corner {
+        background: transparent;
+    }
+}

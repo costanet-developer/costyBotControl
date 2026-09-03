@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Auditoría de Reactivaciones — Costanet</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  :root{
+    --bg:#0F1720;
+    --panel:#151F29;
+    --card:#1B2732;
+    --border:#2A3A47;
+    --text:#E7ECEF;
+    --muted:#8CA0AF;
+    --gold:#C99A3D;
+    --gold-dim:#7A6134;
+    --green:#4CAF7D;
+    --red:#C1493F;
+    --amber:#D9A441;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:'Inter',sans-serif; font-size:14px;
+  }
+  header{
+    padding:22px 28px; border-bottom:1px solid var(--border);
+    display:flex; align-items:baseline; justify-content:space-between;
+  }
+  header h1{
+    font-family:'Fraunces',serif; font-weight:600; font-size:22px; margin:0;
+    letter-spacing:0.2px;
+  }
+  header .sub{color:var(--muted); font-size:12.5px; margin-top:4px;}
+  header .role{
+    font-size:11px; color:var(--gold); border:1px solid var(--gold-dim);
+    padding:4px 10px; border-radius:2px; letter-spacing:0.06em; text-transform:uppercase;
+  }
+  .layout{display:flex; height:calc(100vh - 76px);}
+  .list-pane{
+    width:400px; border-right:1px solid var(--border); overflow-y:auto;
+    background:var(--panel);
+  }
+  .filters{
+    padding:14px 16px; border-bottom:1px solid var(--border);
+    display:flex; flex-wrap:wrap; gap:6px;
+  }
+  .filters input, .filters select{
+    background:var(--card); border:1px solid var(--border); color:var(--text);
+    padding:6px 8px; border-radius:3px; font-size:12.5px; font-family:inherit;
+  }
+  .filters input{flex:1; min-width:140px;}
+  .row{
+    padding:13px 16px; border-bottom:1px solid var(--border);
+    cursor:pointer; transition:background .12s;
+  }
+  .row:hover{background:#1D2934;}
+  .row.active{background:#20303C; border-left:2px solid var(--gold);}
+  .row-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;}
+  .row-name{font-weight:600; font-size:13.5px;}
+  .row-meta{color:var(--muted); font-size:11.5px; font-family:'IBM Plex Mono',monospace;}
+  .pill{
+    font-size:10px; padding:2px 7px; border-radius:20px; text-transform:uppercase;
+    letter-spacing:.04em; font-weight:600;
+  }
+  .pill.ok{background:rgba(76,175,125,.15); color:var(--green);}
+  .pill.warn{background:rgba(217,164,65,.15); color:var(--amber);}
+  .pill.bad{background:rgba(193,73,63,.15); color:var(--red);}
+  .pill.neutral{background:rgba(140,160,175,.15); color:var(--muted);}
+
+  .detail-pane{flex:1; overflow-y:auto; padding:26px 32px;}
+  .detail-header{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:22px;}
+  .detail-header h2{font-family:'Fraunces',serif; font-size:19px; margin:0 0 4px;}
+  .detail-header .id{color:var(--muted); font-family:'IBM Plex Mono',monospace; font-size:12px;}
+
+  .stamp{
+    border:2px solid var(--green); color:var(--green);
+    border-radius:6px; padding:6px 14px; font-family:'Fraunces',serif;
+    font-weight:600; font-size:13px; text-transform:uppercase; letter-spacing:.06em;
+    transform:rotate(-3deg); display:inline-block;
+  }
+  .stamp.review{border-color:var(--amber); color:var(--amber);}
+  .stamp.reject{border-color:var(--red); color:var(--red);}
+
+  .section-title{
+    font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted);
+    margin:26px 0 12px; display:flex; align-items:center; gap:10px;
+  }
+  .section-title::after{content:''; flex:1; height:1px; background:var(--border);}
+
+  .timeline{position:relative; padding-left:20px;}
+  .timeline::before{content:''; position:absolute; left:4px; top:4px; bottom:4px; width:1px; background:var(--border);}
+  .tl-item{position:relative; padding-bottom:16px;}
+  .tl-item::before{
+    content:''; position:absolute; left:-20px; top:3px; width:9px; height:9px;
+    border-radius:50%; background:var(--muted); border:2px solid var(--panel);
+  }
+  .tl-item.friccion::before{background:var(--red);}
+  .tl-item.exito::before{background:var(--green);}
+  .tl-time{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted);}
+  .tl-step{font-weight:600; font-size:13px; margin-top:1px;}
+  .tl-note{color:var(--muted); font-size:12px; margin-top:2px;}
+
+  .voucher-grid{display:flex; gap:22px; align-items:flex-start;}
+  .voucher-img{
+    width:280px; flex-shrink:0; background:var(--card); border:1px solid var(--border);
+    border-radius:6px; padding:16px; position:relative;
+  }
+  .voucher-img svg{width:100%; display:block;}
+  .voucher-img .stamp-overlay{
+    position:absolute; top:36px; right:20px;
+  }
+  .fields{flex:1; background:var(--card); border:1px solid var(--border); border-radius:6px; padding:18px 20px;}
+  .field-row{
+    display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border);
+    font-size:13px;
+  }
+  .field-row:last-child{border-bottom:none;}
+  .field-row .k{color:var(--muted);}
+  .field-row .v{font-family:'IBM Plex Mono',monospace; font-weight:500;}
+  .check{display:flex; gap:16px; margin-top:14px;}
+  .check div{
+    flex:1; background:var(--panel); border:1px solid var(--border); border-radius:4px;
+    padding:8px 10px; font-size:11.5px; display:flex; justify-content:space-between; align-items:center;
+  }
+  .check .yes{color:var(--green);} .check .no{color:var(--red);}
+
+  .risk-box{
+    margin-top:16px; border:1px solid var(--gold-dim); background:rgba(201,154,61,.06);
+    border-radius:4px; padding:12px 14px; font-size:12.5px;
+  }
+  .risk-box .risk-title{color:var(--gold); font-weight:600; margin-bottom:4px; font-size:11.5px; text-transform:uppercase; letter-spacing:.04em;}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Auditoría de Reactivaciones</h1>
+    <div class="sub">Bot WhatsApp · COSTANET+ · datos de ejemplo, solo lectura</div>
+  </div>
+  <div class="role">Contabilidad · lectura</div>
+</header>
+
+<div class="layout">
+  <div class="list-pane">
+    <div class="filters">
+      <select><option>Bot: todos</option><option>reactivacion</option><option>soporte_tecnico</option></select>
+      <select><option>Resultado: todos</option><option>reactivado</option><option>abandonado_sin_comprobante</option></select>
+      <input type="text" placeholder="Buscar por cédula o número...">
+    </div>
+
+    <div class="row active" onclick="showDetail(0)">
+      <div class="row-top">
+        <span class="row-name">María Elena Vera</span>
+        <span class="pill ok">Reactivado</span>
+      </div>
+      <div class="row-meta">0991 234 567 · ses_8f21a · 29 jul 09:14</div>
+    </div>
+
+    <div class="row" onclick="showDetail(1)">
+      <div class="row-top">
+        <span class="row-name">Jorge Andrade P.</span>
+        <span class="pill warn">Monto no coincide</span>
+      </div>
+      <div class="row-meta">0987 654 321 · ses_4c90d · 29 jul 08:02</div>
+    </div>
+
+    <div class="row" onclick="showDetail(2)">
+      <div class="row-top">
+        <span class="row-name">Sin identificar</span>
+        <span class="pill bad">Comprobante duplicado</span>
+      </div>
+      <div class="row-meta">0999 112 233 · ses_a01f7 · 28 jul 21:40</div>
+    </div>
+
+    <div class="row" onclick="showDetail(0)">
+      <div class="row-top">
+        <span class="row-name">Katherine Solís</span>
+        <span class="pill neutral">Abandonado</span>
+      </div>
+      <div class="row-meta">0996 887 112 · ses_bb213 · 28 jul 19:05</div>
+    </div>
+  </div>
+
+  <div class="detail-pane" id="detail">
+    <!-- contenido inyectado por JS -->
+  </div>
+</div>
+
+<script>
+const SESSIONS = [
+{
+  nombre:"María Elena Vera", sesion_id:"ses_8f21a", numero:"0991 234 567",
+  bot:"reactivacion", resultado:"reactivado", estado:"cerrada",
+  inicio:"29 jul 09:14", fin:"29 jul 09:19", intentos:1,
+  stampClass:"", stampText:"Verificado",
+  timeline:[
+    {t:"09:14:02", step:"Menú principal mostrado", note:"", cls:""},
+    {t:"09:14:20", step:"Cédula válida", note:"1723456789", cls:""},
+    {t:"09:15:03", step:"Reactivar seleccionado", note:"", cls:""},
+    {t:"09:17:41", step:"Comprobante recibido", note:"imagen adjunta", cls:""},
+    {t:"09:17:44", step:"No duplicado", note:"", cls:""},
+    {t:"09:18:02", step:"OCR legible", note:"", cls:""},
+    {t:"09:18:05", step:"Monto OK", note:"$18.50 = deuda total", cls:""},
+    {t:"09:18:40", step:"Reactivación exitosa", note:"", cls:"exito"},
+  ],
+  comprobante:{
+    banco:"Banco Pichincha", monto:"$18.50", fecha:"29/07/2026",
+    transaccion:"TRX-88213410", titular:"Maria E Vera G.", cuenta:"****4021",
+    banco_valido:true, cuenta_valida:true, titular_valido:true,
+    riesgo_visual:"bajo", prob_ia:4, riesgo_ia:"bajo", score:96, accion:"aprobar"
+  }
+},
+{
+  nombre:"Jorge Andrade P.", sesion_id:"ses_4c90d", numero:"0987 654 321",
+  bot:"reactivacion", resultado:"monto_no_coincide_final", estado:"cerrada",
+  inicio:"29 jul 07:55", fin:"29 jul 08:02", intentos:2,
+  stampClass:"review", stampText:"Revisar",
+  timeline:[
+    {t:"07:55:11", step:"Menú principal mostrado", note:"", cls:""},
+    {t:"07:55:30", step:"Cédula válida", note:"0912345678", cls:""},
+    {t:"07:56:02", step:"Reactivar seleccionado", note:"", cls:""},
+    {t:"07:58:20", step:"Comprobante recibido", note:"intento 1", cls:""},
+    {t:"07:58:24", step:"Monto no coincide", note:"$12.00 vs deuda $18.50", cls:"friccion"},
+    {t:"08:00:10", step:"Reintento comprobante", note:"intento 2", cls:""},
+    {t:"08:01:55", step:"Monto no coincide", note:"$15.00 vs deuda $18.50", cls:"friccion"},
+    {t:"08:02:30", step:"Cierre sin resolución", note:"", cls:"friccion"},
+  ],
+  comprobante:{
+    banco:"Banco Guayaquil", monto:"$15.00", fecha:"29/07/2026",
+    transaccion:"TRX-77120099", titular:"Jorge L Andrade", cuenta:"****9987",
+    banco_valido:true, cuenta_valida:true, titular_valido:true,
+    riesgo_visual:"bajo", prob_ia:9, riesgo_ia:"bajo", score:71, accion:"revisar"
+  }
+},
+{
+  nombre:"Sin identificar", sesion_id:"ses_a01f7", numero:"0999 112 233",
+  bot:"reactivacion", resultado:"abandonado_sin_comprobante", estado:"cerrada",
+  inicio:"28 jul 21:35", fin:"28 jul 21:40", intentos:1,
+  stampClass:"reject", stampText:"Rechazado",
+  timeline:[
+    {t:"21:35:02", step:"Menú principal mostrado", note:"", cls:""},
+    {t:"21:35:40", step:"Cédula válida", note:"0955443322", cls:""},
+    {t:"21:36:10", step:"Reactivar seleccionado", note:"", cls:""},
+    {t:"21:38:02", step:"Comprobante recibido", note:"", cls:""},
+    {t:"21:38:05", step:"Comprobante duplicado", note:"misma transacción registrada el 22 jul", cls:"friccion"},
+    {t:"21:40:00", step:"Cierre sin resolución", note:"", cls:"friccion"},
+  ],
+  comprobante:{
+    banco:"Banco Pacífico", monto:"$18.50", fecha:"22/07/2026",
+    transaccion:"TRX-55003321", titular:"—", cuenta:"****5510",
+    banco_valido:true, cuenta_valida:false, titular_valido:false,
+    riesgo_visual:"medio", prob_ia:62, riesgo_ia:"alto", score:22, accion:"rechazar"
+  }
+}
+];
+
+function voucherSVG(){
+  return `<svg viewBox="0 0 240 300" xmlns="http://www.w3.org/2000/svg">
+    <rect width="240" height="300" rx="4" fill="#12191F" stroke="#2A3A47"/>
+    <rect x="16" y="18" width="90" height="10" rx="2" fill="#3A4C5A"/>
+    <rect x="16" y="36" width="140" height="7" rx="2" fill="#2A3A47"/>
+    <rect x="16" y="50" width="110" height="7" rx="2" fill="#2A3A47"/>
+    <line x1="16" y1="70" x2="224" y2="70" stroke="#2A3A47"/>
+    <rect x="16" y="84" width="60" height="6" rx="2" fill="#3A4C5A"/>
+    <rect x="150" y="84" width="74" height="6" rx="2" fill="#3A4C5A"/>
+    <rect x="16" y="100" width="80" height="12" rx="2" fill="#C99A3D" opacity="0.8"/>
+    <rect x="16" y="126" width="60" height="6" rx="2" fill="#3A4C5A"/>
+    <rect x="150" y="126" width="74" height="6" rx="2" fill="#3A4C5A"/>
+    <rect x="16" y="142" width="130" height="6" rx="2" fill="#2A3A47"/>
+    <line x1="16" y1="162" x2="224" y2="162" stroke="#2A3A47"/>
+    <rect x="16" y="176" width="70" height="6" rx="2" fill="#3A4C5A"/>
+    <rect x="16" y="192" width="180" height="6" rx="2" fill="#2A3A47"/>
+    <rect x="16" y="206" width="150" height="6" rx="2" fill="#2A3A47"/>
+    <rect x="60" y="240" width="120" height="34" rx="3" fill="none" stroke="#3A4C5A" stroke-dasharray="3 3"/>
+    <text x="120" y="260" fill="#5A6E7C" font-size="9" text-anchor="middle" font-family="monospace">imagen comprobante</text>
+  </svg>`;
+}
+
+function checkRow(label, ok){
+  return `<div><span>${label}</span><span class="${ok? 'yes':'no'}">${ok? '✓ válido':'✕ no coincide'}</span></div>`;
+}
+
+function showDetail(i){
+  document.querySelectorAll('.row').forEach((r,idx)=>r.classList.toggle('active', idx===i));
+  const s = SESSIONS[i];
+  const c = s.comprobante;
+  document.getElementById('detail').innerHTML = `
+    <div class="detail-header">
+      <div>
+        <h2>${s.nombre}</h2>
+        <div class="id">${s.sesion_id} · ${s.numero} · bot: ${s.bot}</div>
+      </div>
+      <div class="stamp ${s.stampClass}">${s.stampText}</div>
+    </div>
+
+    <div class="section-title">Línea de tiempo de la sesión</div>
+    <div class="timeline">
+      ${s.timeline.map(e=>`
+        <div class="tl-item ${e.cls}">
+          <div class="tl-time">${e.t}</div>
+          <div class="tl-step">${e.step}</div>
+          ${e.note? `<div class="tl-note">${e.note}</div>`:''}
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="section-title">Comprobante y validación OCR</div>
+    <div class="voucher-grid">
+      <div class="voucher-img">${voucherSVG()}</div>
+      <div class="fields">
+        <div class="field-row"><span class="k">Banco</span><span class="v">${c.banco}</span></div>
+        <div class="field-row"><span class="k">Monto</span><span class="v">${c.monto}</span></div>
+        <div class="field-row"><span class="k">Fecha comprobante</span><span class="v">${c.fecha}</span></div>
+        <div class="field-row"><span class="k">N° transacción</span><span class="v">${c.transaccion}</span></div>
+        <div class="field-row"><span class="k">Titular</span><span class="v">${c.titular}</span></div>
+        <div class="field-row"><span class="k">Cuenta destino</span><span class="v">${c.cuenta}</span></div>
+
+        <div class="check">
+          ${checkRow('Banco', c.banco_valido)}
+          ${checkRow('Cuenta', c.cuenta_valida)}
+          ${checkRow('Titular', c.titular_valido)}
+        </div>
+
+        <div class="risk-box">
+          <div class="risk-title">Riesgo IA generativa / visual</div>
+          Riesgo visual: <b>${c.riesgo_visual}</b> · Prob. imagen generada: <b>${c.prob_ia}%</b> ·
+          Riesgo IA: <b>${c.riesgo_ia}</b> · Score confianza: <b>${c.score}/100</b> ·
+          Acción recomendada: <b>${c.accion}</b>
+        </div>
+      </div>
+    </div>
+  `;
+}
+showDetail(0);
+</script>
+</body>
+</html>
